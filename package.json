@@ -3,6 +3,7 @@
     "version": "1.0.0",
     "description": "",
     "main": "script.js",
+    "type": "module",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
@@ -10,6 +11,6 @@
     "license": "MIT",
     "dependencies": {
         "jsontoxml": "^1.0.1",
-        "xlsx": "^0.16.9"
+        "xlsx": "^0.18.5"
     }
 }
