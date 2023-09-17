@@ -1,6 +1,3 @@
-// Import dependencies
-import * as XLSX from 'xlsx';
-
 console.log(XLSX.book_new);
 
     // Parsing user input from logic notation
