@@ -1,146 +1,108 @@
-console.log(XLSX.book_new);
+// Parsing user input from logic notation
+function parseInput(input) {
+  const ops = ['and', 'or', 'xor', 'iff', '=', '(', ')'];
+  const tokens = input.split(/(and|or|xor|iff|\(|\)|=)/g)
+      .map(e => e.trim())
+      .filter(e => e.length > 0);
 
-    // Parsing user input from logic notation
-    // this is to get the variables
-    function parseInput(input) {
-      let variables = new Set();
-      let ops = ['and', 'or', 'xor', 'iff', '~', '=>']; //~ is not, => is implies
-
-      let cleanedInput = input.replace(/[\s=]|and|~|or|xor|iff|=>|,/g,''); // Remove spaces, and equals sign
-      let tokens = cleanedInput.split('');
-
-      tokens.forEach(token => {
-        if (!ops.includes(token) && isNaN(token)) { // Make sure that the token isn't a number
+  const variables = new Set();
+  tokens.forEach(token => {
+      if (!ops.includes(token) && isNaN(token)) {
           variables.add(token);
-        }
-      });
-
-      return Array.from(variables); // Set -> Array
-    }
-
-    // this is to separate each expression (they are separatede using commas from the input like emathhelp)
-    function parseExpressions(input){
-      let expressionArray = input.split(',');
-
-      //there is probably a better way to do this
-      for(var i = 0; i < expressionArray.length; i++){
-        if(expressionArray[i].trim() == ','){
-          expressionArray.slice(i,1);
-        }
       }
+  });
 
-      //this will go on row 1
-      return expressionArray;
-    }
+  return Array.from(variables);
+}
 
-    // Generate truth table combinations
-  function generateCombinations(vars) {
-    if (vars.length === 0) return [[]];
+// Generate truth table combinations
+function generateCombinations(vars) {
+  if (vars.length === 0) return [[]];
 
-    let firstVar = vars[0];
-    let restvars = vars.slice(1);
-
-    let smallerCombinations = generateCombinations(restvars);
-    let combinations = [];
-
-    smallerCombinations.forEach(combination => {
-      combinations.push([false, ...combination]);
-      combinations.push([true, ...combination]);
-    });
-
-    return combinations;
-  }
+  const firstVar = vars[0];
+  const restvars = vars.slice(1);
+  const smallerCombinations = generateCombinations(restvars);
+  
+  return smallerCombinations.flatMap(combination => [
+      [false, ...combination],
+      [true, ...combination]
+  ]);
+}
 
 function xor(a, b) {
-    //return a !== b;
-    return "XOR("+a+","+b+")";
+  return a !== b;
 }
 
 function iff(a, b) {
-    //return a === b;
-    return "IF("+a+","+b+","+"TRUE)";
+  return a === b;
 }
 
-function and(a,b){
-  return "AND("+a+","+b+")";
+function handleIFF(exp) {
+  const matches = exp.match(/([a-zA-Z0-9_]+)\s*=\s*([a-zA-Z0-9_]+|\([^)]*\))/);
+  if (matches) {
+      return exp.replace(matches[0], `iff(${matches[1]}, ${matches[2]})`);
+  }
+  return exp;
 }
 
-function or(a,b){
-  return "OR("+a+","+b+")";
-}
-
-function not(a){
-  return "NOT("+b+")";
+function handleXor(exp) {
+  const xorRegex = /\b(\w+)\s*xor\s*(\w+)\b/;
+  while (xorRegex.test(exp)) {
+      exp = exp.replace(xorRegex, (match, leftVar, rightVar) => {
+          return `xor(${leftVar}, ${rightVar})`;
+      });
+  }
+  return exp;
 }
 
 function evaluateExpression(expression, values) {
-    let exp = expression.replace(/and/g, '&&')
-                        .replace(/or/g, '||')
-                        .replace(/xor/g, '!==') 
-                        .replace(/iff/g, '==='); 
+  // Replace variables with their respective values
+  for (let key in values) {
+      expression = expression.replace(new RegExp('\\b' + key + '\\b', 'g'), String(values[key]));
+  }
 
-    return eval(exp);
+  let exp = expression
+      .replace(/and/g, '&&')
+      .replace(/or/g, '||')
+      .replace(/=/g, 'iff');
+
+  // Handle 'xor' and 'iff'
+  exp = handleXor(exp);
+  exp = handleIFF(exp);
+
+  console.log("Evaluating:", exp);
+  try {
+      return eval(exp);
+  } catch (e) {
+      console.error(`Failed to evaluate expression "${expression}":`, e);
+      return false;
+  }
 }
 
-// add an event listener to the form to handle submission
+// DOMContentLoaded event
 document.addEventListener("DOMContentLoaded", function () {
-  let inputElement = document.getElementById("new-task-title");
+  const inputElement = document.getElementById("new-task-title");
 
   document.getElementById("new-task-form").addEventListener("submit", function (e) {
-      e.preventDefault(); // prevent the form from submitting and refreshing the page
+      e.preventDefault();
 
-      // Get the user's input from the input element
-      let inputValue = inputElement.value;
-
-      let variables = parseInput(inputValue);
-      //let combinations = generateCombinations(variables);
-
-      let expressions = parseExpressions(inputValue);
-
-      // Creating the truth table
-      let table = [];
-      table.push([...variables, ...expressions]); // adds the expressions to row 1
+      const inputValue = inputElement.value;
+      const variables = parseInput(inputValue);
+      const combinations = generateCombinations(variables);
       
-
-
-      //row 2 
-      let row2 = [];
-      for(var i = 0; i < variables.length; i++){
-        row2.push("TRUE");
-      }
+      const table = combinations.map(combination => {
+          const values = Object.fromEntries(variables.map((variable, idx) => [variable, combination[idx]]));
+          const result = evaluateExpression(inputValue, values);
+          return [...combination, result];
+      });
       
+      table.unshift([...variables, inputValue]);
 
-      // for(var j = 0; j < expressions.length;j++){
-      //   row2.push(evaluateExpression(expressions[i])); //
-      // }
-
-      table.push(row2);
-      //row 2 end
-
-
-      // combinations.forEach(combination => {
-      //     let values = {};
-      //     for (let i = 0; i < variables.length; i++) {
-      //         values[variables[i]] = combination[i];
-      //     }
-
-      //     let result = evaluateExpression(inputValue.split('=')[1].trim(), values);
-      //     //let result = evaluateExpression(inputValue.split('=')[1], values);
-      //     table.push([...combination, result]);
-      // });
-
-
-
-
-      // Workbook edit
       console.log(XLSX.version);
       const workbook = XLSX.utils.book_new();
-
-      let worksheet = XLSX.utils.aoa_to_sheet(table); // Use the correct variable name
+      const worksheet = XLSX.utils.aoa_to_sheet(table);
       
-      let new_name = XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1", true);
-      
-      // Write to the excel file
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
       XLSX.writeFile(workbook, "test.xlsx");
   });
 });
