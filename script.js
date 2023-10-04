@@ -1,76 +1,84 @@
-// Parsing user input from logic notation
-function parseInput(input) {
-  const ops = ['and', 'or', 'xor', 'iff', '=', '(', ')'];
-  const tokens = input.split(/(and|or|xor|iff|\(|\)|=)/g)
-      .map(e => e.trim())
-      .filter(e => e.length > 0);
-
-  const variables = new Set();
-  tokens.forEach(token => {
-      if (!ops.includes(token) && isNaN(token)) {
-          variables.add(token);
-      }
-  });
-
-  return Array.from(variables);
-}
-
-// Generate truth table combinations
-function generateCombinations(vars) {
-  if (vars.length === 0) return [[]];
-
-  const firstVar = vars[0];
-  const restvars = vars.slice(1);
-  const smallerCombinations = generateCombinations(restvars);
+    // Parsing user input from logic notation
+    function parseInput(input) {
+      let variables = new Set();
+      let ops = ['and', 'or', 'xor', 'iff', '=', '(', ')'];
   
-  return smallerCombinations.flatMap(combination => [
-      [false, ...combination],
-      [true, ...combination]
-  ]);
+      // Splitting using regex to separate variables and operators
+      let tokens = input.split(/(and|or|xor|iff|\(|\)|=)/g).map(e => e.trim()).filter(e => e.length > 0);
+  
+      tokens.forEach(token => {
+          if (!ops.includes(token) && isNaN(token)) {
+              variables.add(token);
+          }
+      });
+  
+      return Array.from(variables);
+  }
+
+    // Generate truth table combinations
+  function generateCombinations(vars) {
+    if (vars.length === 0) return [[]];
+
+    let firstVar = vars[0];
+    let restvars = vars.slice(1);
+
+    let smallerCombinations = generateCombinations(restvars);
+    let combinations = [];
+
+    smallerCombinations.forEach(combination => {
+      combinations.push([false, ...combination]);
+      combinations.push([true, ...combination]);
+    });
+
+    return combinations;
+  }
+
+  window.xor = function(a, b) {
+    return a !== b;
 }
 
-function xor(a, b) {
-  return a !== b;
-}
-
-function iff(a, b) {
-  return a === b;
+  window.iff = function(a, b) {
+    return a === b;
 }
 
 function handleIFF(exp) {
   const matches = exp.match(/([a-zA-Z0-9_]+)\s*=\s*([a-zA-Z0-9_]+|\([^)]*\))/);
   if (matches) {
-      return exp.replace(matches[0], `iff(${matches[1]}, ${matches[2]})`);
+    const leftVar = matches[1];
+    const rightExpression = matches[2];
+    return exp.replace(matches[0], `iff(${leftVar}, ${rightExpression})`);
   }
   return exp;
 }
 
 function handleXor(exp) {
   const xorRegex = /\b(\w+)\s*xor\s*(\w+)\b/;
+
   while (xorRegex.test(exp)) {
       exp = exp.replace(xorRegex, (match, leftVar, rightVar) => {
           return `xor(${leftVar}, ${rightVar})`;
       });
   }
+
   return exp;
 }
 
 function evaluateExpression(expression, values) {
-  // Replace variables with their respective values
+  // 1. Replacing variables with their respective values
   for (let key in values) {
       expression = expression.replace(new RegExp('\\b' + key + '\\b', 'g'), String(values[key]));
   }
 
-  let exp = expression
-      .replace(/and/g, '&&')
-      .replace(/or/g, '||')
-      .replace(/=/g, 'iff');
+  // 2. Replace logical operators
+  let exp = expression.replace(/and/g, '&&').replace(/or/g, '||');
 
-  // Handle 'xor' and 'iff'
+  // Handling 'xor'
   exp = handleXor(exp);
+
+  // 3. Handling '='
   exp = handleIFF(exp);
 
-  console.log("Evaluating:", exp);
+  console.log("Evaluating:", exp); // Debug log to see the expression being evaluated
   try {
       return eval(exp);
   } catch (e) {
@@ -79,30 +87,42 @@ function evaluateExpression(expression, values) {
   }
 }
 
-// DOMContentLoaded event
+// add an event listener to the form to handle submission
 document.addEventListener("DOMContentLoaded", function () {
-  const inputElement = document.getElementById("new-task-title");
+  let inputElement = document.getElementById("new-task-title");
 
   document.getElementById("new-task-form").addEventListener("submit", function (e) {
-      e.preventDefault();
+      e.preventDefault(); // prevent the form from submitting and refreshing the page
 
-      const inputValue = inputElement.value;
-      const variables = parseInput(inputValue);
-      const combinations = generateCombinations(variables);
-      
-      const table = combinations.map(combination => {
-          const values = Object.fromEntries(variables.map((variable, idx) => [variable, combination[idx]]));
-          const result = evaluateExpression(inputValue, values);
-          return [...combination, result];
+      // Get the user's input from the input element
+      let inputValue = inputElement.value;
+
+      let variables = parseInput(inputValue);
+      let combinations = generateCombinations(variables);
+
+      // Creating the truth table
+      let table = [];
+      table.push([...variables, inputValue]);
+
+      combinations.forEach(combination => {
+          let values = {};
+          for (let i = 0; i < variables.length; i++) {
+              values[variables[i]] = combination[i];
+          }
+
+          let result = evaluateExpression(inputValue, values);
+          table.push([...combination, result]);
       });
-      
-      table.unshift([...variables, inputValue]);
 
+      // Workbook edit
       console.log(XLSX.version);
       const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.aoa_to_sheet(table);
+
+      let worksheet = XLSX.utils.aoa_to_sheet(table); // Use the correct variable name
       
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+      let new_name = XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1", true);
+      
+      // Write to the excel file
       XLSX.writeFile(workbook, "test.xlsx");
   });
 });
