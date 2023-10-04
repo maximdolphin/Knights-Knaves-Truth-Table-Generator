@@ -1,19 +1,37 @@
+console.log(XLSX.book_new);
+
     // Parsing user input from logic notation
+    // this is to get the variables
     function parseInput(input) {
       let variables = new Set();
-      let ops = ['and', 'or', 'xor', 'iff', '=', '(', ')'];
-  
-      // Splitting using regex to separate variables and operators
-      let tokens = input.split(/(and|or|xor|iff|\(|\)|=)/g).map(e => e.trim()).filter(e => e.length > 0);
-  
+      let ops = ['and', 'or', 'xor', 'iff', '~', '=>']; //~ is not, => is implies
+
+      let cleanedInput = input.replace(/[\s=]|and|~|or|xor|iff|=>|,/g,''); // Remove spaces, and equals sign
+      let tokens = cleanedInput.split('');
+
       tokens.forEach(token => {
-          if (!ops.includes(token) && isNaN(token)) {
-              variables.add(token);
-          }
+        if (!ops.includes(token) && isNaN(token)) { // Make sure that the token isn't a number
+          variables.add(token);
+        }
       });
-  
-      return Array.from(variables);
-  }
+
+      return Array.from(variables); // Set -> Array
+    }
+
+    // this is to separate each expression (they are separatede using commas from the input like emathhelp)
+    function parseExpressions(input){
+      let expressionArray = input.split(',');
+
+      //there is probably a better way to do this
+      for(var i = 0; i < expressionArray.length; i++){
+        if(expressionArray[i].trim() == ','){
+          expressionArray.slice(i,1);
+        }
+      }
+
+      //this will go on row 1
+      return expressionArray;
+    }
 
     // Generate truth table combinations
   function generateCombinations(vars) {
@@ -33,58 +51,35 @@
     return combinations;
   }
 
-  window.xor = function(a, b) {
-    return a !== b;
+function xor(a, b) {
+    //return a !== b;
+    return "XOR("+a+","+b+")";
 }
 
-  window.iff = function(a, b) {
-    return a === b;
+function iff(a, b) {
+    //return a === b;
+    return "IF("+a+","+b+","+"TRUE)";
 }
 
-function handleIFF(exp) {
-  const matches = exp.match(/([a-zA-Z0-9_]+)\s*=\s*([a-zA-Z0-9_]+|\([^)]*\))/);
-  if (matches) {
-    const leftVar = matches[1];
-    const rightExpression = matches[2];
-    return exp.replace(matches[0], `iff(${leftVar}, ${rightExpression})`);
-  }
-  return exp;
+function and(a,b){
+  return "AND("+a+","+b+")";
 }
 
-function handleXor(exp) {
-  const xorRegex = /\b(\w+)\s*xor\s*(\w+)\b/;
+function or(a,b){
+  return "OR("+a+","+b+")";
+}
 
-  while (xorRegex.test(exp)) {
-      exp = exp.replace(xorRegex, (match, leftVar, rightVar) => {
-          return `xor(${leftVar}, ${rightVar})`;
-      });
-  }
-
-  return exp;
+function not(a){
+  return "NOT("+b+")";
 }
 
 function evaluateExpression(expression, values) {
-  // 1. Replacing variables with their respective values
-  for (let key in values) {
-      expression = expression.replace(new RegExp('\\b' + key + '\\b', 'g'), String(values[key]));
-  }
+    let exp = expression.replace(/and/g, '&&')
+                        .replace(/or/g, '||')
+                        .replace(/xor/g, '!==') 
+                        .replace(/iff/g, '==='); 
 
-  // 2. Replace logical operators
-  let exp = expression.replace(/and/g, '&&').replace(/or/g, '||');
-
-  // Handling 'xor'
-  exp = handleXor(exp);
-
-  // 3. Handling '='
-  exp = handleIFF(exp);
-
-  console.log("Evaluating:", exp); // Debug log to see the expression being evaluated
-  try {
-      return eval(exp);
-  } catch (e) {
-      console.error(`Failed to evaluate expression "${expression}":`, e);
-      return false;
-  }
+    return eval(exp);
 }
 
 // add an event listener to the form to handle submission
@@ -98,21 +93,57 @@ document.addEventListener("DOMContentLoaded", function () {
       let inputValue = inputElement.value;
 
       let variables = parseInput(inputValue);
-      let combinations = generateCombinations(variables);
+      //let combinations = generateCombinations(variables);
+
+      let expressions = parseExpressions(inputValue);
 
       // Creating the truth table
       let table = [];
-      table.push([...variables, inputValue]);
+      table.push([...variables, ...expressions]); // adds the expressions to row 1
+      
 
-      combinations.forEach(combination => {
-          let values = {};
-          for (let i = 0; i < variables.length; i++) {
-              values[variables[i]] = combination[i];
+
+      //row 2 
+      for(let i = 0; i < Math.pow(2, variables.length); i++) {
+        let bin = i.toString(2).padStart(variables.length, '0');
+        let row = [];
+        for(let x = 0; x < bin.length; x++) {
+          console.log(bin.charAt(x));
+          switch (bin.charAt(x)) {
+            case '0':
+              row.push("FALSE");
+              break;
+            case '1':
+              row.push("TRUE");
+              break;
           }
+        }
+        console.log(row);
+        table.push(row);
+      }
+      
+      
 
-          let result = evaluateExpression(inputValue, values);
-          table.push([...combination, result]);
-      });
+      // for(var j = 0; j < expressions.length;j++){
+      //   row2.push(evaluateExpression(expressions[i])); //
+      // }
+
+      //row 2 end
+
+
+      // combinations.forEach(combination => {
+      //     let values = {};
+      //     for (let i = 0; i < variables.length; i++) {
+      //         values[variables[i]] = combination[i];
+      //     }
+
+      //     let result = evaluateExpression(inputValue.split('=')[1].trim(), values);
+      //     //let result = evaluateExpression(inputValue.split('=')[1], values);
+      //     table.push([...combination, result]);
+      // });
+
+
+
 
       // Workbook edit
       console.log(XLSX.version);
