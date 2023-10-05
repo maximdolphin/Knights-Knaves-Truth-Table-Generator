@@ -4,9 +4,9 @@ console.log(XLSX.book_new);
     // this is to get the variables
     function parseInput(input) {
       let variables = new Set();
-      let ops = ['and', 'or', 'xor', 'iff', '~', '=>']; //~ is not, => is implies
+      let ops = ['and', 'or', 'xor', 'iff', '!', '->','\(','\)']; //! is not, -> is implies
 
-      let cleanedInput = input.replace(/[\s=]|and|~|or|xor|iff|=>|,/g,''); // Remove spaces, and equals sign
+      let cleanedInput = input.replace(/[\s=]|and|!|or|xor|iff|\)|\(|->|,/g,''); // Remove spaces, and equals sign
       let tokens = cleanedInput.split('');
 
       tokens.forEach(token => {
@@ -52,34 +52,44 @@ console.log(XLSX.book_new);
   }
 
 function xor(a, b) {
-    //return a !== b;
-    return "XOR("+a+","+b+")";
+    return a !== b;
 }
 
 function iff(a, b) {
-    //return a === b;
-    return "IF("+a+","+b+","+"TRUE)";
+    return a === b;
 }
 
-function and(a,b){
-  return "AND("+a+","+b+")";
-}
 
-function or(a,b){
-  return "OR("+a+","+b+")";
-}
 
 function not(a){
-  return "NOT("+b+")";
+  return !a;
 }
 
-function evaluateExpression(expression, values) {
+function evaluateExpression(expression) {
     let exp = expression.replace(/and/g, '&&')
                         .replace(/or/g, '||')
                         .replace(/xor/g, '!==') 
-                        .replace(/iff/g, '==='); 
+                        .replace(/iff/g, '===');
+                        //we need to do something about implies
 
-    return eval(exp);
+
+
+    return exp;
+}
+
+// function declareVar(nameString,value) {
+//   let newValue;
+//   if(value == "TRUE"){
+//     newValue = 1;
+//   } else {
+//     newValue = 0;
+//   }
+//   eval(nameString + " = " + "'" + newValue + "'");
+  
+// }
+
+function declareVar(nameString, value) {
+  window[nameString] = (value === "TRUE" ? 1 : 0);
 }
 
 // add an event listener to the form to handle submission
@@ -103,45 +113,59 @@ document.addEventListener("DOMContentLoaded", function () {
       
 
 
-      //row 2 
+      let expressionsOutputList = [];
+      for(let o = 0; o<expressions.length;o++){
+        expressionsOutputList.push(evaluateExpression(expressions[o]));
+      }
+
+      //row 2 to end
       for(let i = 0; i < Math.pow(2, variables.length); i++) {
         let bin = i.toString(2).padStart(variables.length, '0');
         let row = [];
         for(let x = 0; x < bin.length; x++) {
-          console.log(bin.charAt(x));
+          //console.log(bin.charAt(x));
           switch (bin.charAt(x)) {
             case '0':
-              row.push("FALSE");
+              row.push("TRUE");
               break;
             case '1':
-              row.push("TRUE");
+              row.push("FALSE");
               break;
           }
         }
-        console.log(row);
+        // evaluate the logical expressions here
+        
+        
+        for(let m = 0; m < expressions.length; m++){
+          
+          let tempVarList = parseInput(expressions[m]);
+          
+          //declares every temp variable (a b c d etc)
+          for(let k = 0; k < tempVarList.length;k++){
+            for(let b = 0; b < variables.length; b++){
+              if(variables[b] == tempVarList[k]){
+                declareVar(tempVarList[k],row[b]);
+                
+              }
+            }
+          }
+
+
+          
+          let tempToPush = eval(expressionsOutputList[m]);
+          if(tempToPush == 1){
+            row.push("TRUE");
+          } else if (tempToPush == 0){
+            row.push("FALSE");
+          }
+        }
+        
+
+        //console.log(row);
         table.push(row);
       }
       
       
-
-      // for(var j = 0; j < expressions.length;j++){
-      //   row2.push(evaluateExpression(expressions[i])); //
-      // }
-
-      //row 2 end
-
-
-      // combinations.forEach(combination => {
-      //     let values = {};
-      //     for (let i = 0; i < variables.length; i++) {
-      //         values[variables[i]] = combination[i];
-      //     }
-
-      //     let result = evaluateExpression(inputValue.split('=')[1].trim(), values);
-      //     //let result = evaluateExpression(inputValue.split('=')[1], values);
-      //     table.push([...combination, result]);
-      // });
-
 
 
 
