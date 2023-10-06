@@ -282,6 +282,6 @@ document.addEventListener("DOMContentLoaded", function () {
       const worksheet = XLSX.utils.aoa_to_sheet(table);
 
       XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-      XLSX.writeFile(workbook, "test.xlsx");
+      XLSX.writeFile(workbook, "truthtable.xlsx");
   });
 });
