@@ -67,9 +67,9 @@ function not(a){
 
 function evaluateExpression(expression) {
     let exp = expression.replace(/and/g, '&&')
-                        .replace(/or/g, '||')
                         .replace(/xor/g, '!==') 
-                        .replace(/iff/g, '===');
+                        .replace(/iff/g, '===')
+                        .replace(/or/g, '||');
                         //we need to do something about implies
 
 
