@@ -1,183 +1,287 @@
-console.log(XLSX.book_new);
+// Parsing user input from logic notation
+function parseInput(input) {
+  // Extract only valid variable names
+  const tokens = input.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g) || [];
 
-    // Parsing user input from logic notation
-    // this is to get the variables
-    function parseInput(input) {
-      let variables = new Set();
-      let ops = ['and', 'or', 'xor', 'iff', '!', '->','\(','\)']; //! is not, -> is implies
+  // Filtering out logic keywords
+  const logicKeywords = ['xor', 'and', 'or', 'iff', 'true', 'false'];
+  const variables = tokens.filter(token => !logicKeywords.includes(token));
 
-      let cleanedInput = input.replace(/[\s=]|and|!|or|xor|iff|\)|\(|->|,/g,''); // Remove spaces, and equals sign
-      let tokens = cleanedInput.split('');
+  return Array.from(new Set(variables));
+}
 
-      tokens.forEach(token => {
-        if (!ops.includes(token) && isNaN(token)) { // Make sure that the token isn't a number
-          variables.add(token);
-        }
-      });
+// Generate truth table combinations
+function generateCombinations(vars) {
+  // if (vars.length === 0) return [[]];
 
-      return Array.from(variables); // Set -> Array
-    }
-
-    // this is to separate each expression (they are separatede using commas from the input like emathhelp)
-    function parseExpressions(input){
-      let expressionArray = input.split(',');
-
-      //there is probably a better way to do this
-      for(var i = 0; i < expressionArray.length; i++){
-        if(expressionArray[i].trim() == ','){
-          expressionArray.slice(i,1);
-        }
+  // const restvars = vars.slice(1);
+  // const smallerCombinations = generateCombinations(restvars);
+  
+  // return smallerCombinations.flatMap(combination => [
+  //     [false, ...combination],
+  //     [true, ...combination]
+  // ]);
+  let tempTable = [];
+  for(let i = 0; i < Math.pow(2, vars.length); i++) {
+    let bin = i.toString(2).padStart(vars.length, '0');
+    let row = [];
+    for(let x = 0; x < bin.length; x++) {
+      //console.log(bin.charAt(x));
+      switch (bin.charAt(x)) {
+        case '0':
+          row.push(true);
+          break;
+        case '1':
+          row.push(false);
+          break;
       }
-
-      //this will go on row 1
-      return expressionArray;
     }
-
-    // Generate truth table combinations
-  function generateCombinations(vars) {
-    if (vars.length === 0) return [[]];
-
-    let firstVar = vars[0];
-    let restvars = vars.slice(1);
-
-    let smallerCombinations = generateCombinations(restvars);
-    let combinations = [];
-
-    smallerCombinations.forEach(combination => {
-      combinations.push([false, ...combination]);
-      combinations.push([true, ...combination]);
-    });
-
-    return combinations;
+    tempTable.push(row);
   }
+  return tempTable;
+}
+
+function not(a){
+  if(a){
+    return false;
+  } else {
+    return true;
+  }
+}
 
 function xor(a, b) {
-    return a !== b;
+  return (not(a) === b);
 }
 
 function iff(a, b) {
-    return a === b;
+  return a === b;
 }
 
-
-
-function not(a){
-  return !a;
+function implies(a, b) {
+  return (not(a) || b);
 }
 
-function evaluateExpression(expression) {
-    let exp = expression.replace(/and/g, '&&')
-                        .replace(/xor/g, '!==') 
-                        .replace(/iff/g, '===')
-                        .replace(/or/g, '||');
-                        //we need to do something about implies
-
-
-
-    return exp;
-}
-
-// function declareVar(nameString,value) {
-//   let newValue;
-//   if(value == "TRUE"){
-//     newValue = 1;
-//   } else {
-//     newValue = 0;
-//   }
-//   eval(nameString + " = " + "'" + newValue + "'");
-  
-// }
-
-function declareVar(nameString, value) {
-  window[nameString] = (value === "TRUE" ? 1 : 0);
-}
-
-// add an event listener to the form to handle submission
-document.addEventListener("DOMContentLoaded", function () {
-  let inputElement = document.getElementById("new-task-title");
-
-  document.getElementById("new-task-form").addEventListener("submit", function (e) {
-      e.preventDefault(); // prevent the form from submitting and refreshing the page
-
-      // Get the user's input from the input element
-      let inputValue = inputElement.value;
-
-      let variables = parseInput(inputValue);
-      //let combinations = generateCombinations(variables);
-
-      let expressions = parseExpressions(inputValue);
-
-      // Creating the truth table
-      let table = [];
-      table.push([...variables, ...expressions]); // adds the expressions to row 1
-      
-
-
-      let expressionsOutputList = [];
-      for(let o = 0; o<expressions.length;o++){
-        expressionsOutputList.push(evaluateExpression(expressions[o]));
+function handleNegation(exp) {
+  const negationRegex = /~([a-zA-Z_][a-zA-Z0-9_]*|\((?:[^()]|\([^)]*\))+\))/g;
+  return exp.replace(negationRegex, (match, varOrExpr) => {
+      // Check if varOrExpr is a parentheses expression and, if so, process its content
+      if (varOrExpr.startsWith('(') && varOrExpr.endsWith(')')) {
+          return `!${varOrExpr}`;
       }
+      return `!${varOrExpr}`; // negate the variable
+  });
+}
 
-      //row 2 to end
-      for(let i = 0; i < Math.pow(2, variables.length); i++) {
-        let bin = i.toString(2).padStart(variables.length, '0');
-        let row = [];
-        for(let x = 0; x < bin.length; x++) {
-          //console.log(bin.charAt(x));
-          switch (bin.charAt(x)) {
-            case '0':
-              row.push("TRUE");
-              break;
-            case '1':
-              row.push("FALSE");
-              break;
-          }
-        }
-        // evaluate the logical expressions here
-        
-        
-        for(let m = 0; m < expressions.length; m++){
+function evaluateInnermostParentheses(exp, values) {
+  const parenRegex = /\(([^()]+)\)/; // This matches the innermost parentheses
+
+  let match;
+  while (match = exp.match(parenRegex)) {
+      let innerResult = evaluateExpressionWithoutParens(match[1], values); 
+      exp = exp.replace(match[0], String(innerResult)); // Ensure innerResult is cast to string for proper replacement
+  }
+
+  return exp;
+}
+
+function handleIFF(exp) {
+  const matchesRegex = /([a-zA-Z0-9_]+)\s*=\s*([a-zA-Z0-9_]+|\([^)]*\))/;
+  while (matchesRegex.test(exp)) {
+      exp = exp.replace(matchesRegex, (match, leftVar, rightVar) => {
+          return `iff(${leftVar}, ${rightVar})`;
+      });
+  }
+  return exp;
+}
+
+function handleXor(exp) {
+  const xorRegex = /(\w+|\([^)]+\))\s*xor\s*(\w+|\([^)]+\))/;
+  while (xorRegex.test(exp)) {
+      exp = exp.replace(xorRegex, (match, leftVar, rightVar) => {
+          return `xor(${leftVar.trim()}, ${rightVar.trim()})`;
+      });
+  }
+  return exp;
+}
+
+function handleImplies(exp) {
+  let prevExpression;
+  do {
+      prevExpression = exp;
+      exp = exp.replace(/(~?[a-zA-Z_][a-zA-Z0-9_]*|\([^)]+\))\s*->\s*(~?[a-zA-Z_][a-zA-Z0-9_]*|\([^)]+\))/, (match, leftVar, rightVar) => {
+          return `implies(${leftVar}, ${rightVar})`;
+      });
+  } while (exp !== prevExpression);
+  return exp;
+}
+
+function evaluateExpressionWithoutParens(expression, values) {
+  let exp = expression;
+
+  // 1. Print the initial expression
+  console.log("Initial Expression:", exp);
+
+  exp = handleNegation(exp); 
+  // 1.1 Print after handleNegation
+  console.log("After handleNegation:", exp);       
+
+  exp = handleXor(exp);
+  // 1.2 Print after handleXor
+  console.log("After handleXor:", exp);
+
+  exp = handleIFF(exp);
+  // 1.3 Print after handleIFF 
+  console.log("After handleIFF:", exp);  
+
+  exp = handleImplies(exp);
+  // 1.4 Print after handleImplies
+  console.log("After handleImplies:", exp);
+
+  exp = exp
+      .replace(/\band\b/g, '&&')
+      .replace(/\bor\b/g, '||')
+      .replace(/\btrue\b/g, 'true')
+      .replace(/\bfalse\b/g, 'false');
+
+  // Replace variable values after replacing operators
+  for (let key in values) {
+      if (!['xor', 'and', 'or', 'iff', '->', '=', '~'].includes(key)) { 
+          exp = exp.replace(new RegExp('\\b' + key + '\\b', 'g'), String(values[key]));
+      }
+  }
+
+  // Check for any residual implications
+  if (exp.includes("->")) {
+      throw new Error("Failed to process some implications in the expression.");
+  }
+
+  console.log("Evaluating:", exp);
+
+  // Using IIFE to evaluate the expression, passing helper functions as arguments
+  try {
+      return eval(`(function(xor, iff, implies) { return ${exp}; })`)(xor, iff, implies);
+  } catch (e) {
+      console.error(`Failed to evaluate expression "${expression}":`, e);
+      throw e;  // propagate the error so we can handle it later
+  }
+}
+
+function evaluateExpression(expression, values) {
+  let exp = expression;
+
+  while (/\(/.test(exp)) { // As long as there are parentheses
+      exp = evaluateInnermostParentheses(exp, values);
+  }
+
+  // 3. Wrap the evaluation inside try-catch
+  try {
+      return evaluateExpressionWithoutParens(exp, values);
+  } catch (error) {
+      console.error(`Error evaluating logic expression: ${expression} - ${error.message}`);
+      throw error;  // propagate the error to be caught outside
+  }
+}
+
+function isValidExpression(expression) {
+  const dummyValues = {};
+  const variables = parseInput(expression);
+  for (let variable of variables) {
+      dummyValues[variable] = true;  // Use any boolean value as a dummy value
+  }
+  try {
+      evaluateExpression(expression, dummyValues);
+      return true;
+  } catch (e) {
+      return false;
+  }
+}
+
+
+function addParenthesesToTildeLetters(input){
+  let result = input.split('');
+
+  for(let i = 0; i < result.length;i++){
+      if((result[i] === '~') && result[i+1] !== '('){
+          //insert ( at index i+1 and insert ) at index {i+2?}
+          result.splice(i, 0, '(');
+          result.splice(i+3,0,')');
+          i += 3;
+      } else if (result[i] === '~' && result[i+1] === '('){
+          result.splice(i,0,'(');
+
+          //open parenth counter
+          let openParenthCounter = 0;
           
-          let tempVarList = parseInput(expressions[m]);
-          
-          //declares every temp variable (a b c d etc)
-          for(let k = 0; k < tempVarList.length;k++){
-            for(let b = 0; b < variables.length; b++){
-              if(variables[b] == tempVarList[k]){
-                declareVar(tempVarList[k],row[b]);
-                
-              }
+
+          let charCounter = 0;
+
+          for(let p = i; p < result.length;p++){
+            if(result[p] === '('){
+              openParenthCounter++;
+            } else if(result[p] === ')'){
+              openParenthCounter--;
+            }
+            charCounter++;
+            if((result[p] === ')') && (openParenthCounter == 1) ){
+              result.splice(p,0,')');
             }
           }
 
-
-          
-          let tempToPush = eval(expressionsOutputList[m]);
-          if(tempToPush == 1){
-            row.push("TRUE");
-          } else if (tempToPush == 0){
-            row.push("FALSE");
-          }
-        }
-        
-
-        //console.log(row);
-        table.push(row);
+          i+=3;
       }
-      
-      
+
+  }
+  let output = "";
+  for(let j = 0; j < result.length;j++){
+      output += result[j];
+  }
 
 
 
-      // Workbook edit
+  return output;
+}
+
+
+
+// DOMContentLoaded event
+document.addEventListener("DOMContentLoaded", function () {
+  const inputElement = document.getElementById("new-task-title");
+
+  document.getElementById("new-task-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      let rawInput = addParenthesesToTildeLetters(inputElement.value.trim());
+      console.log(rawInput);
+      const expressions = rawInput.split(',').map(expr => expr.trim());
+
+      // Check if all expressions are valid
+      for (const expr of expressions) {
+          if (!isValidExpression(expr)) {
+              console.error(`Invalid logic expression: ${expr}`);
+              return;
+          }
+      }
+
+      const variables = parseInput(rawInput);
+      const combinations = generateCombinations(variables);
+
+      const table = combinations.map(combination => {
+          const values = Object.fromEntries(variables.map((variable, idx) => [variable, combination[idx]]));
+          const results = expressions.map(expr => {
+              console.log("Processing input:", expr, "with values:", values);
+              return evaluateExpression(expr, values);
+          });
+          return [...combination, ...results];
+      });
+
+      // Header contains variable names and all expressions
+      table.unshift([...variables, ...expressions]);
+
       console.log(XLSX.version);
       const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(table);
 
-      let worksheet = XLSX.utils.aoa_to_sheet(table); // Use the correct variable name
-      
-      let new_name = XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1", true);
-      
-      // Write to the excel file
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
       XLSX.writeFile(workbook, "test.xlsx");
   });
 });
